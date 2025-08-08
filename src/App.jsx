@@ -4,19 +4,8 @@ import {
   Newspaper,
   Star,
   RefreshCw,
-  ThumbsUp,
-  ThumbsDown
+  // ThumbsUp, ThumbsDown, // Firebase 관련 아이콘 삭제
 } from "lucide-react";
-
-// Firebase
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth, signInAnonymously, onAuthStateChanged
-} from 'firebase/auth';
-import {
-  getFirestore, collection, query, where, onSnapshot,
-  addDoc, deleteDoc, doc, getDocs, getDoc, updateDoc, setDoc
-} from 'firebase/firestore';
 
 // ---- UI placeholders (shadcn 대체) ----
 const Alert = ({ variant, children }) => (
@@ -39,62 +28,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [latestDate, setLatestDate] = useState("");
-  const [activeTab, setActiveTab] = useState("recommended");
+  const [activeTab, setActiveTab] = useState("all"); // 기본 탭을 전체 뉴스로 변경
 
-  // Firebase states
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [bookmarkedNewsIds, setBookmarkedNewsIds] = useState(new Set());
-
-  // AI insight stuff
-  const [aiInsights, setAiInsights] = useState({});
-  const [loadingInsight, setLoadingInsight] = useState({});
-  const [aiInsightMetrics, setAiInsightMetrics] = useState({});
-  const [aiInsightComments, setAiInsightComments] = useState([]);
-  const [isGeneratingAiReply, setIsGeneratingAiReply] = useState(false);
-
-  // ====== 🔧 교체 포인트 (너 키/설정으로 바꿔야 동작) ======
-  const SHEET_ID  = "1UFE_q1cuaa4WrgATcO6MlvZOgq1zKkU_IAHrJzxPU7U"; // 예시
+  // Firebase 관련 상태 및 로직 모두 삭제
+  // API 키를 직접 교체
+  const SHEET_ID = "1UFE_q1cuaa4WrgATcO6MlvZOgq1zKkU_IAHrJzxPU7U";
   const SHEET_NAME = "news";
-  const GOOGLE_SHEETS_API_KEY = "YOUR_SHEETS_API_KEY"; // <-- 너의 키로 교체
-
-  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; // <-- 너의 키로 교체 (노출주의)
-
-  // Firebase 콘솔에서 발급받은 설정값으로 교체
-  const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-  };
-  // ======================================================
-
-  // Firebase init & anon auth
-  useEffect(() => {
-    try {
-      const app = initializeApp(firebaseConfig);
-      const firestore = getFirestore(app);
-      const authInstance = getAuth(app);
-      setDb(firestore);
-      setAuth(authInstance);
-
-      const unsub = onAuthStateChanged(authInstance, async (user) => {
-        if (user) {
-          setUserId(user.uid);
-        } else {
-          await signInAnonymously(authInstance);
-          setUserId(authInstance.currentUser?.uid);
-        }
-      });
-      return () => unsub();
-    } catch (e) {
-      console.error("Firebase 초기화 실패:", e);
-      setError("앱 초기화 중 오류가 발생했습니다.");
-    }
-  }, []);
+  const GOOGLE_SHEETS_API_KEY = "AIzaSyDIig_uUt8grXOehM3JyI_sabFBh3EuTS8";
+  const GEMINI_API_KEY = "AIzaSyDIig_uUt8grXOehM3JyI_sabFBh3EuTS8";
 
   // Google Sheets fetch
   const fetchNewsFromGoogleSheets = async () => {
@@ -128,7 +69,7 @@ export default function App() {
 
       setNewsData(parsed);
       if (parsed.length) {
-        const latest = parsed.sort((a,b)=>new Date(b.date)-new Date(a.date))[0].date;
+        const latest = parsed.sort((a, b) => new Date(b.date) - new Date(a.date))[0].date;
         setLatestDate(latest);
       }
     } catch (err) {
@@ -147,86 +88,19 @@ export default function App() {
     }
   };
 
-  // Firestore: bookmarks
-  useEffect(() => {
-    if (!db || !userId) return;
-    const bookmarksRef = collection(db, `artifacts/default-app/users/${userId}/bookmarks`);
-    const q = query(bookmarksRef);
-    const unsub = onSnapshot(q, (snap) => {
-      const set = new Set(snap.docs.map(d => d.data().newsId));
-      setBookmarkedNewsIds(set);
-    }, () => setError("북마크를 불러오는 데 실패했습니다."));
-    return () => unsub();
-  }, [db, userId]);
-
-  // Firestore: aiInsightMetrics
-  useEffect(() => {
-    if (!db || newsData.length === 0 || !userId) return;
-    const metricsRef = collection(db, `artifacts/default-app/public/data/aiInsightMetrics`);
-    const unsub = onSnapshot(metricsRef, async (snap) => {
-      const fetched = {};
-      snap.forEach(d => { fetched[d.id] = d.data(); });
-      setAiInsightMetrics(fetched);
-
-      for (const news of newsData) {
-        if (!fetched[news.id]) {
-          try {
-            await setDoc(doc(metricsRef, String(news.id)), {
-              upvotes: 0, downvotes: 0, newsId: news.id
-            }, { merge: true });
-          } catch (e) {
-            console.error("메트릭스 초기화 실패:", e);
-          }
-        }
-      }
-    }, () => setError("AI 인사이트 메트릭스를 불러오는 데 실패했습니다."));
-    return () => unsub();
-  }, [db, userId, newsData]);
-
-  // Firestore: comments
-  useEffect(() => {
-    if (!db || !userId) return;
-    const commentsRef = collection(db, `artifacts/default-app/public/data/aiInsightComments`);
-    const qy = query(commentsRef);
-    const unsub = onSnapshot(qy, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setAiInsightComments(list);
-    }, () => setError("AI 인사이트 댓글을 불러오지 못했습니다."));
-    return () => unsub();
-  }, [db, userId]);
+  useEffect(() => { fetchNewsFromGoogleSheets(); }, []);
 
   const groupNewsByDate = (data) =>
     data.reduce((g, n) => ((g[n.date] ||= []).push(n), g), {});
 
-  const filtered = activeTab === "recommended"
-    ? newsData.filter(n => n.tags.includes("추천"))
-    : activeTab === "bookmarks"
-      ? newsData.filter(n => bookmarkedNewsIds.has(n.id))
-      : newsData;
-
+  // 모든 탭 로직을 "전체 뉴스"로 통일 (북마크, 추천 로직 삭제)
+  const filtered = newsData; // 더 이상 필터링이 필요 없으므로 newsData를 그대로 사용
   const grouped = groupNewsByDate(filtered);
   const sortedDates = Object.keys(grouped).sort((a,b)=>new Date(b)-new Date(a));
 
   const [showMoreCounts, setShowMoreCounts] = useState({});
   const handleLoadMore = (date) => {
     setShowMoreCounts(prev => ({ ...prev, [date]: (prev[date] || 3) + 3 }));
-  };
-
-  const toggleBookmark = async (newsId) => {
-    if (!db || !userId) { setError("북마크 처리 실패: 인증/DB 문제"); return; }
-    const base = `artifacts/default-app/users/${userId}/bookmarks`;
-    const ref = collection(db, base);
-    try {
-      if (bookmarkedNewsIds.has(newsId)) {
-        const qy = query(ref, where("newsId","==",newsId));
-        const snap = await getDocs(qy);
-        snap.forEach(async d => await deleteDoc(doc(db, base, d.id)));
-      } else {
-        await addDoc(ref, { newsId, timestamp: new Date().toISOString() });
-      }
-    } catch (e) {
-      console.error(e); setError("북마크 처리 중 오류");
-    }
   };
 
   const fetchAiInsight = async (newsId, newsTitle) => {
@@ -255,76 +129,9 @@ export default function App() {
     }
   };
 
-  const handleAiInsightVote = async (newsId, type) => {
-    if (!db || !userId) { setError("투표 실패: 인증/DB 문제"); return; }
-    const ref = doc(db, `artifacts/default-app/public/data/aiInsightMetrics`, String(newsId));
-    try {
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const cur = snap.data();
-        const update = {
-          upvotes: cur.upvotes || 0,
-          downvotes: cur.downvotes || 0
-        };
-        if (type === 'up') update.upvotes++;
-        if (type === 'down') update.downvotes++;
-        await updateDoc(ref, update);
-      } else {
-        await setDoc(ref, {
-          newsId, upvotes: type === 'up' ? 1 : 0, downvotes: type === 'down' ? 1 : 0
-        }, { merge: true });
-      }
-    } catch (e) {
-      console.error(e); setError("투표 업데이트 실패");
-    }
-  };
-
-  const generateAiRebuttal = async (newsId, humanCommentText, newsTitle) => {
-    if (!db || !userId) return;
-    setIsGeneratingAiReply(true);
-    const prompt =
-`뉴스 제목: "${newsTitle}"
-인간 댓글: "${humanCommentText}"
-[형식]
-[AI의 생각]
-[1줄 반박]
-[근거1]
-[근거2]`;
-    const payload = { contents: [{ role:"user", parts:[{ text: prompt }]}] };
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
-
-    try {
-      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(await res.text());
-      const j = await res.json();
-      const raw = j?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const lines = raw.split('\n').filter(Boolean);
-      const reply = lines.slice(0,4).join('\n') || "응답 생성 실패";
-
-      await addDoc(collection(db, `artifacts/default-app/public/data/aiInsightComments`), {
-        newsId, text: reply, timestamp: new Date().toISOString(), userId: "AI", role: "ai"
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsGeneratingAiReply(false);
-    }
-  };
-
-  const handleAddAiInsightComment = async (newsId, commentText, newsTitle) => {
-    if (!commentText.trim() || !db || !userId) return;
-    try {
-      await addDoc(collection(db, `artifacts/default-app/public/data/aiInsightComments`), {
-        newsId, text: commentText, timestamp: new Date().toISOString(), userId, role:"user"
-      });
-      generateAiRebuttal(newsId, commentText, newsTitle);
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => { fetchNewsFromGoogleSheets(); }, []);
+  // 기존 Firebase 관련 이벤트 핸들러(toggleBookmark, handleAiInsightVote 등) 모두 삭제
 
   // UI
- 
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 bg-white shadow-sm z-10">
@@ -334,19 +141,15 @@ export default function App() {
             <span className="text-xl font-bold text-gray-900">정자일로 데일리 뉴스</span>
           </div>
           {latestDate && <span className="text-gray-500 text-sm">업데이트: {latestDate}</span>}
+          <button onClick={() => fetchNewsFromGoogleSheets()} className="p-2 rounded-full hover:bg-gray-100">
+            <RefreshCw size={24} className="text-gray-600" />
+          </button>
         </div>
         <div className="flex justify-start border-b border-gray-200 bg-gray-50 px-4">
-          <button onClick={()=>{setActiveTab("recommended"); setShowMoreCounts({});}}
-                  className={`py-3 px-6 text-lg font-semibold ${activeTab==="recommended"?"text-blue-600 border-b-2 border-blue-600":"text-gray-600 hover:text-gray-800"}`}>
-            추천 뉴스
-          </button>
+          {/* 탭 기능 간소화 */}
           <button onClick={()=>{setActiveTab("all"); setShowMoreCounts({});}}
-                  className={`py-3 px-6 text-lg font-semibold ${activeTab==="all"?"text-blue-600 border-b-2 border-blue-600":"text-gray-600 hover:text-gray-800"}`}>
+                  className={`py-3 px-6 text-lg font-semibold text-blue-600 border-b-2 border-blue-600`}>
             전체 뉴스
-          </button>
-          <button onClick={()=>{setActiveTab("bookmarks"); setShowMoreCounts({});}}
-                  className={`py-3 px-6 text-lg font-semibold ${activeTab==="bookmarks"?"text-blue-600 border-b-2 border-blue-600":"text-gray-600 hover:text-gray-800"}`}>
-            북마크
           </button>
         </div>
       </header>
@@ -379,11 +182,7 @@ export default function App() {
                 <Card key={news.id || idx} className="p-4 bg-gray-50">
                   <div className="flex justify-between items-start">
                     <h3 className="text-xl font-bold text-gray-800 mb-1 flex-grow">{news.title}</h3>
-                    <button onClick={()=>toggleBookmark(news.id)}
-                            className="ml-4 p-2 rounded-full hover:bg-gray-200"
-                            aria-label="Toggle bookmark">
-                      <Star size={24} className={bookmarkedNewsIds.has(news.id) ? "text-yellow-500" : "text-gray-400"} />
-                    </button>
+                    {/* 북마크 버튼 삭제 */}
                   </div>
                   <div className="text-gray-500 text-sm mb-2">{news.date}</div>
                   <p className="text-gray-700 text-base leading-relaxed mb-3">{news.summary}</p>
@@ -397,7 +196,6 @@ export default function App() {
                       <ExternalLink size={16} /> 원문 보기
                     </a>
                   )}
-
                   <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col items-end">
                     <button onClick={()=>fetchAiInsight(news.id, news.title)}
                             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
@@ -407,63 +205,7 @@ export default function App() {
                     {aiInsights[news.id] && (
                       <div className="mt-2 p-3 bg-gray-50 rounded-md text-gray-800 text-sm w-full">
                         <p className="whitespace-pre-wrap">{aiInsights[news.id]}</p>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-3 border-t pt-2 border-gray-200">
-                          <span className="font-semibold">인사이트 평가:</span>
-                          <div className="flex items-center gap-1">
-                            <button onClick={()=>handleAiInsightVote(news.id,'up')} className="p-1 rounded-full hover:bg-gray-200"><ThumbsUp size={16} /></button>
-                            <span>{aiInsightMetrics[news.id]?.upvotes || 0}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button onClick={()=>handleAiInsightVote(news.id,'down')} className="p-1 rounded-full hover:bg-gray-200"><ThumbsDown size={16} /></button>
-                            <span>{aiInsightMetrics[news.id]?.downvotes || 0}</span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <h5 className="text-md font-semibold text-gray-700 mb-2">AI 인사이트에 대한 인간의 반박💬</h5>
-                          <div className="space-y-2 mb-3">
-                            {aiInsightComments
-                              .filter(c => c.newsId === news.id)
-                              .sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp))
-                              .map((c,i)=>(
-                                <div key={c.id || i}
-                                  className={`p-2 rounded-md text-sm ${c.role==="ai"?"bg-blue-50 text-blue-800 ml-4":"bg-gray-100 text-gray-800"}`}>
-                                  <p className="whitespace-pre-wrap">{c.text}</p>
-                                  <span className="text-xs text-gray-500">
-                                    {c.role==="ai" ? "AI" : c.userId?.substring(0,8)+"..."} - {new Date(c.timestamp).toLocaleString()}
-                                  </span>
-                                </div>
-                              ))}
-                            {aiInsightComments.filter(c=>c.newsId===news.id).length===0 && (
-                              <p className="text-sm text-gray-500">아직 인사이트에 대한 댓글이 없습니다.</p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="인사이트에 대한 댓글을 입력하세요..."
-                              className="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              id={`ai-insight-comment-input-${news.id}`}
-                              onKeyPress={(e)=>{
-                                if(e.key==='Enter'){
-                                  handleAddAiInsightComment(news.id, e.target.value, news.title);
-                                  e.target.value='';
-                                }
-                              }}
-                              disabled={isGeneratingAiReply}
-                            />
-                            <button
-                              onClick={()=>{
-                                const el = document.getElementById(`ai-insight-comment-input-${news.id}`);
-                                if (el) { handleAddAiInsightComment(news.id, el.value, news.title); el.value=''; }
-                              }}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                              disabled={isGeneratingAiReply}
-                            >
-                              {isGeneratingAiReply ? 'AI 생각중...' : 'AI에게 반박'}
-                            </button>
-                          </div>
-                        </div>
+                        {/* 인사이트 평가 및 댓글 섹션 삭제 */}
                       </div>
                     )}
                   </div>
