@@ -1,11 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// GitHub Pages에 배포 시, base를 저장소 이름으로 설정
 export default defineConfig({
+  base: '/news-app/', // ✅ GitHub Pages 저장소명
   plugins: [react()],
-  base: '/news-app/', // GitHub 저장소 이름과 동일하게
-  build: {
-    outDir: 'docs', // GitHub Pages용
-  },
 })
