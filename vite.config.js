@@ -1,10 +1,8 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/news-app/', // ✅ GitHub Pages 경로
-  build: {
-    outDir: 'docs', // ✅ GitHub Pages용 docs 폴더
-  },
-});
+  base: '/news-app/' // ⭐ GitHub 저장소 이름
+})
