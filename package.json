@@ -2,6 +2,7 @@
   "name": "news-app",
   "version": "0.0.0",
   "private": true,
+  "homepage": "https://kimgomdol.github.io/news-app",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
