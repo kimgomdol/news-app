@@ -11,17 +11,41 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, collection, query, where, onSnapshot } from 'firebase/firestore';
 
 // These are placeholder components to mimic shadcn/ui for this single-file immersive.
-const Alert = ({ variant, children, className }) => (
-  <div className={`p-4 rounded-lg my-4 ${variant === 'destructive' ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-blue-100 text-blue-700 border border-blue-300'} ${className}`}>
-    {children}
-  </div>
-);
+const Alert = ({ variant, children, className }) => {
+  // 클래스 문자열 구성 방식을 단순화하여 환경 오류를 방지합니다.
+  let finalClasses = "p-4 rounded-lg my-4 text-sm ";
+  
+  if (variant === 'destructive') {
+    finalClasses += 'bg-red-100 text-red-700 border border-red-300';
+  } else {
+    finalClasses += 'bg-blue-100 text-blue-700 border border-blue-300';
+  }
+  
+  if (className) {
+    finalClasses += ' ' + className;
+  }
 
-const Card = ({ children, className }) => (
-  <div className={`bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 ${className}`}>
-    {children}
-  </div>
-);
+  return (
+    <div className={finalClasses}>
+      {children}
+    </div>
+  );
+};
+
+const Card = ({ children, className }) => {
+  // 클래스 문자열 구성 방식을 단순화하여 환경 오류를 방지합니다.
+  let finalClasses = "bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 transition-all duration-300 hover:shadow-xl";
+  
+  if (className) {
+    finalClasses += ' ' + className;
+  }
+
+  return (
+    <div className={finalClasses}>
+      {children}
+    </div>
+  );
+};
 
 const ITNewsApp = () => {
   // State for news data and UI elements
@@ -30,7 +54,8 @@ const ITNewsApp = () => {
   const [error, setError] = useState("");
   const [latestDate, setLatestDate] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-  const [showMoreCounts, setShowMoreCounts] = useState({});
+  // activeSubTab 상태는 더 이상 사용하지 않지만, 필터링 로직을 위해 'it'으로 고정합니다.
+  const [activeSubTab, setActiveSubTab] = useState("it"); 
 
   // State for Firebase services and user authentication
   const [db, setDb] = useState(null);
@@ -38,7 +63,13 @@ const ITNewsApp = () => {
   const [userId, setUserId] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // localStorage 유틸리티 함수들
+  // --- Configuration ---
+  const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'it-news-app-preview';
+  const SHEET_ID = "1UFE_q1cuaa4WrgATcO6MlvZOgq1zKkU_IAHrJzxPU7U";
+  const SHEET_NAME = "news";
+  const GOOGLE_SHEETS_API_KEY = "AIzaSyDIig_uUt8grXOehM3JyI_sabFBh3EuTS8";
+
+  // --- Utility Functions (using localStorage as per original design) ---
   const getBookmarksFromStorage = () => {
     try {
       const bookmarks = localStorage.getItem('news-bookmarks');
@@ -60,13 +91,6 @@ const ITNewsApp = () => {
   // State for application features
   const [bookmarkedNewsIds, setBookmarkedNewsIds] = useState(() => getBookmarksFromStorage());
   const [selectedKeyword, setSelectedKeyword] = useState(null);
-
-  // --- Configuration ---
-  const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'it-news-app-preview';
-  const SHEET_ID = "1acTFF7Hlca4iU7rixWd2Hkx0wHy1zJERUXJpZ_joYO0";
-  const SHEET_NAME = "NEWS";
-  const GOOGLE_SHEETS_API_KEY = "AIzaSyDIig_uUt8grXOehM3JyI_sabFBh3EuTS8";
-  const GA_MEASUREMENT_ID = "G-8VSL7PKF5M";
 
   // --- Firebase Initialization & Authentication ---
   useEffect(() => {
@@ -116,45 +140,6 @@ const ITNewsApp = () => {
     }
   }, []);
 
-  // --- Google Analytics 4 (GA4) Integration ---
-  useEffect(() => {
-    const scriptId = 'ga-script';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.async = true;
-      script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-      document.head.appendChild(script);
-
-      script.onload = () => {
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){window.dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', GA_MEASUREMENT_ID, {
-          send_page_view: false
-        });
-        console.log("GA4 script loaded and initialized.");
-
-        gtag('event', 'page_view', {
-          page_path: window.location.pathname + window.location.search,
-          page_title: document.title,
-          page_location: window.location.href,
-        });
-        console.log("Initial GA4 page_view sent.");
-      };
-    }
-  }, []);
-
-  useEffect(() => {
-    if (window.gtag) {
-      window.gtag('event', 'page_view', {
-        page_path: `/${activeTab}`,
-        page_title: `키워드뉴스 - ${activeTab} 탭`,
-        page_location: window.location.origin + `/${activeTab}`,
-      });
-      console.log(`GA4 page_view for tab: ${activeTab} sent.`);
-    }
-  }, [activeTab]);
 
   // --- Data Fetching: Google Sheets News ---
   const fetchNews = useCallback(async () => {
@@ -212,7 +197,7 @@ const ITNewsApp = () => {
         });
 
         // Generate a consistent, unique ID based on title and date
-        newsItem.id = `${newsItem.title.replace(/[^a-zA-Z0-9가-힣]/g, '')}-${newsItem.date}`;
+        newsItem.id = newsItem.title.replace(/[^a-zA-Z0-9가-힣]/g, '') + '-' + newsItem.date;
 
         return newsItem;
       }).filter(news => news.title);
@@ -224,7 +209,7 @@ const ITNewsApp = () => {
       }
     } catch (err) {
       console.error("Failed to fetch from Google Sheets:", err);
-      setError(`뉴스 데이터를 불러오는 데 실패했습니다. (${err.message})`);
+      setError("뉴스 데이터를 불러오는 데 실패했습니다. (시뮬레이션 데이터 사용)");
       loadSimulatedData();
     } finally {
       setLoading(false);
@@ -268,11 +253,20 @@ const ITNewsApp = () => {
         imageUrl: "https://placehold.co/100x80/FF9900/FFFFFF?text=CLOUD",
         nickname: "클라우드김", companyName: "AWS", jobTitle: "클라우드 아키텍트", recommendationStrength: 4, recommendationReason: "클라우드 도입을 고민하는 기업에게 필독!", likes: 15
       },
+      {
+        // 이 뉴스는 이제 필터링되어 보이지 않습니다.
+        title: "서울 아파트 매매가, 3개월 연속 상승세... '부동산 규제 완화' 영향", keyword: "부동산", source: "조선일보", tags: "#부동산 #아파트 #매매가 #투자", url: "https://example.com/news7", date: "2025-08-02", time: '10:30', summary: "서울 지역 아파트 매매가가 3개월 연속 상승세를 기록하며 부동산 시장이 활기를 되찾고 있습니다. 전문가들은 정부의 부동산 규제 완화 정책이 영향을 미쳤다고 분석합니다.", content: "강남, 서초 등 주요 지역을 중심으로 매물이 소진되고 있으며, 신축 아파트 단지의 청약 경쟁률도 높아지고 있습니다. 다만, 금리 인상 가능성과 경기 불확실성이 여전히 변수로 남아있습니다.",
+        imageUrl: "https://placehold.co/100x80/006400/FFFFFF?text=REAL+ESTATE",
+        nickname: "집주인최", companyName: "대한부동산", jobTitle: "부동산 중개사", recommendationStrength: 5, recommendationReason: "실거주와 투자 모두 고려해야 할 시점입니다.", likes: 2
+      },
     ];
 
-    const parsedNews = commonSimulatedData.map(news => ({
+    // 부동산 키워드를 가진 뉴스 필터링 로직 제거
+    const filteredSimulatedData = commonSimulatedData.filter(news => news.keyword !== '부동산');
+
+    const parsedNews = filteredSimulatedData.map(news => ({
       ...news,
-      id: `${news.title.replace(/[^a-zA-Z0-9가-힣]/g, '')}-${news.date}`
+      id: news.title.replace(/[^a-zA-Z0-9가-힣]/g, '') + '-' + news.date
     }));
 
     setNewsData(parsedNews);
@@ -292,10 +286,6 @@ const ITNewsApp = () => {
 
   // --- Event Handlers & Logic ---
 
-  const handleLoadMore = (date) => {
-    setShowMoreCounts(p => ({ ...p, [date]: (p[date] || 10) + 7 }));
-  };
-
   const toggleBookmark = (newsId) => {
     setBookmarkedNewsIds(prev => {
       const newBookmarks = new Set(prev);
@@ -310,24 +300,26 @@ const ITNewsApp = () => {
   };
 
   // --- Rendering Logic ---
-  const recentNews = newsData.filter(news => {
+  const filteredNewsData = newsData.filter(news => {
+    // 기본 필터링: 최근 7일 뉴스만
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    return new Date(news.date) >= oneWeekAgo;
-  });
-  const uniqueKeywords = [...new Set(recentNews.map(news => news.keyword).filter(Boolean))];
+    const isRecent = new Date(news.date) >= oneWeekAgo;
 
-  const filteredNewsData = newsData.filter(news => {
+    // 메인 탭에 따른 필터링 (activeTab이 'all'일 때만 키워드 필터링 적용)
     if (activeTab === "all") {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const isRecent = new Date(news.date) >= oneWeekAgo;
+      // 부동산 관련 필터링 로직 제거. 이제 newsData 자체가 IT 뉴스만 포함한다고 가정.
       const matchesKeyword = !selectedKeyword || news.keyword === selectedKeyword;
       return isRecent && matchesKeyword;
     }
-    if (activeTab === "bookmarks") return bookmarkedNewsIds.has(news.id);
+    if (activeTab === "bookmarks") {
+      return bookmarkedNewsIds.has(news.id);
+    }
     return true;
   });
+
+  // 이제 newsData는 IT/테크 뉴스만 포함하므로, '부동산' 필터링 로직이 필요 없습니다.
+  const uniqueKeywords = [...new Set(newsData.map(news => news.keyword).filter(Boolean))];
 
   const groupedNewsByDate = filteredNewsData.reduce((groups, news) => {
     const date = news.date || "날짜 없음";
@@ -337,37 +329,59 @@ const ITNewsApp = () => {
   }, {});
   const sortedDates = Object.keys(groupedNewsByDate).sort((a, b) => new Date(b) - new Date(a));
 
+  // 키워드 스크롤 컨테이너 ID
+  const KEYWORD_SCROLL_ID = "keyword-scroll-container";
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
+      {/* Scrollbar Hide CSS for the Keyword List (Fixes layout issue on some browsers/devices) */}
+      <style>
+        {`
+          /* Custom styles to hide scrollbar specifically for the keyword container */
+          #${KEYWORD_SCROLL_ID}::-webkit-scrollbar {
+            display: none;
+          }
+          #${KEYWORD_SCROLL_ID} {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+          }
+        `}
+      </style>
+
       {/* Header Section */}
-      <header className="sticky top-0 bg-white shadow-sm z-20">
-        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+      <header className="sticky top-0 bg-white shadow-md z-20">
+        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Newspaper className="text-blue-600 w-7 h-7" />
-            <h1 className="text-2xl font-bold text-gray-900">키워드뉴스</h1>
+            <h1 className="text-2xl font-extrabold text-gray-900">키워드뉴스</h1>
           </div>
           {latestDate && (
-            <span className="text-gray-500 text-sm self-center">
-              업데이트: {latestDate}
+            <span className="text-gray-500 text-xs sm:text-sm self-center">
+              최신 업데이트: {latestDate}
             </span>
           )}
         </div>
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs (Sub-navigation tabs are removed) */}
         <div className="flex justify-start border-b border-gray-200 bg-gray-50 px-4">
           {["all", "bookmarks"].map(tab => (
             <button
               key={tab}
-              onClick={() => { setActiveTab(tab); }}
-              className={`py-3 px-5 text-base font-semibold transition-colors duration-200 ${
-                activeTab === tab
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-              }`}
+              onClick={() => { 
+                setActiveTab(tab); 
+                setActiveSubTab(tab === 'all' ? 'it' : null); // Keep internal state 'it' for 'all' tab
+                setSelectedKeyword(null); 
+              }}
+              className={"py-3 px-5 text-base font-semibold transition-colors duration-200 sm:px-6 " +
+                (activeTab === tab
+                  ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                  : "text-gray-600 hover:text-blue-600 hover:bg-gray-100")
+              }
             >
-              {tab === 'all' ? '전체' : '북마크'}
+              {tab === 'all' ? '전체 뉴스' : '북마크'}
             </button>
           ))}
         </div>
+        {/* Removed Sub-navigation for "전체" tab */}
       </header>
 
       {/* Main Content Area */}
@@ -375,26 +389,32 @@ const ITNewsApp = () => {
         {loading && <div className="text-center text-gray-500 p-8"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div><p>뉴스 데이터를 불러오는 중...</p></div>}
         {error && !loading && <Alert variant="destructive" className="mx-auto max-w-4xl">{error}</Alert>}
 
+        {/* Keyword Filter is now shown directly under 'all' tab */}
         {activeTab === 'all' && !loading && (
-          <div className="max-w-4xl mx-auto mb-4">
-            <div className="flex flex-wrap gap-2">
+          <div className="max-w-4xl mx-auto mb-6">
+            <h3 className="text-md font-semibold text-gray-700 mb-2">키워드 필터</h3>
+            <div id={KEYWORD_SCROLL_ID} className="flex overflow-x-auto whitespace-nowrap gap-2 pb-2">
               <button
                 onClick={() => setSelectedKeyword(null)}
-                className={`px-4 py-1 rounded-full text-sm font-semibold transition-colors duration-200 ${
-                  selectedKeyword === null ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                }`}
+                className={"px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 flex-shrink-0 " +
+                  (selectedKeyword === null 
+                    ? 'bg-blue-600 text-white shadow-md' 
+                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300')
+                }
               >
-                전체
+                #전체보기
               </button>
               {uniqueKeywords.map(keyword => (
                 <button
                   key={keyword}
                   onClick={() => setSelectedKeyword(keyword)}
-                  className={`px-4 py-1 rounded-full text-sm font-semibold transition-colors duration-200 ${
-                    selectedKeyword === keyword ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                  }`}
+                  className={"px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 flex-shrink-0 " +
+                    (selectedKeyword === keyword 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300')
+                  }
                 >
-                  {keyword}
+                  #{keyword}
                 </button>
               ))}
             </div>
@@ -404,58 +424,74 @@ const ITNewsApp = () => {
         {['all', 'bookmarks'].includes(activeTab) && !loading && (
             <>
               {sortedDates.length === 0 && !error && (
-                  <div className="text-center text-gray-500 p-8 mt-8">
+                  <div className="text-center text-gray-500 p-8 mt-8 bg-white rounded-xl shadow-lg max-w-4xl mx-auto">
                       <MessageCircle className="w-16 h-16 mx-auto text-gray-300 mb-4" />
                       <h3 className="text-xl font-semibold text-gray-700">표시할 뉴스가 없습니다.</h3>
                       <p className="text-gray-500 mt-2">
                           {activeTab === 'bookmarks' ? '북마크한 뉴스가 여기에 표시됩니다.' :
-                            '다른 탭을 확인해보세요.'}
+                            '선택한 키워드나 기간에 해당하는 뉴스가 없습니다.'}
                       </p>
                   </div>
               )}
               {sortedDates.map(date => (
-                  <section key={date} className="max-w-4xl mx-auto mb-8">
-                      <h2 className="text-lg font-bold text-gray-700 mb-3 pl-2 border-l-4 border-blue-500">{date}</h2>
-                      <div className="space-y-4">
-                          {groupedNewsByDate[date].slice(0, showMoreCounts[date] || 10).map((news) => (
-                              <Card key={news.id} className="p-4 bg-white hover:shadow-md transition-shadow duration-200">
-                                <div className="flex justify-between items-start gap-4 pt-3 border-t border-gray-100">
-                                  <h3 className="text-base text-gray-800 mb-1 flex-grow">{news.title}</h3>
+                  <section key={date} className="max-w-4xl mx-auto mb-10">
+                      <h2 className="text-xl font-extrabold text-gray-800 mb-4 pl-3 border-l-4 border-blue-500">{date}</h2>
+                      <div className="space-y-5">
+                          {groupedNewsByDate[date].map((news) => (
+                              <Card key={news.id} className="p-5">
+                                <div className="flex justify-between items-start gap-4">
+                                  <div className="flex-grow min-w-0">
+                                    {/* News Title: Increased size and ensured text wrapping */}
+                                    <h3 className="text-xl font-bold text-gray-900 leading-snug mb-2 pr-4">{news.title}</h3>
+                                  </div>
                                   <button onClick={() => toggleBookmark(news.id)} className="p-2 rounded-full hover:bg-yellow-100 transition-colors flex-shrink-0" aria-label="Toggle bookmark">
-                                    <Star size={22} className={bookmarkedNewsIds.has(news.id) ? "text-yellow-500 fill-current" : "text-gray-400 hover:text-yellow-500"} />
+                                    <Star size={24} className={bookmarkedNewsIds.has(news.id) ? "text-yellow-500 fill-current" : "text-gray-400 hover:text-yellow-500"} />
                                   </button>
                                 </div>
-                                <div className="flex items-start gap-4 mt-2">
+                                
+                                <div className="flex items-start gap-4 mt-3">
                                   {news.imageUrl && (
                                     <img
                                       src={news.imageUrl}
                                       alt={news.title}
-                                      className="w-24 h-20 object-cover rounded-md flex-shrink-0"
-                                      onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/100x80/E2E8F0/64748B?text=No+Img`; }}
+                                      className="w-28 h-24 object-cover rounded-lg flex-shrink-0 border border-gray-100"
+                                      onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/112x96/E2E8F0/64748B?text=No+Img"; }}
                                     />
                                   )}
                                   <p className="flex-grow text-gray-700 text-base leading-relaxed">{news.summary}</p>
                                 </div>
-                                {news.content && (
-                                  <p className="text-gray-700 text-base leading-relaxed mt-3 border-t border-gray-100 pt-3">{news.content}</p>
-                                )}
-                                <div className="flex justify-between items-center text-sm text-gray-600 mt-4">
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                                    <span className="bg-gray-100 px-2 py-1 rounded-md font-medium">{news.keyword}</span>
-                                    <span>{news.source}</span>
-                                    {news.url && <a href={news.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"><ExternalLink size={14} />원문 보기</a>}
-                                    {news.date && (
-                                      <span className="text-gray-500 text-xs flex-shrink-0">{news.date}</span>
+
+                                {/* Detailed Content/Recommendation */}
+                                {(news.content || news.recommendationReason) && (
+                                  <div className="mt-4 pt-4 border-t border-gray-100">
+                                    {news.content && (
+                                      <div className="text-gray-700 text-sm leading-relaxed mb-3">{news.content}</div>
                                     )}
+                                    {news.recommendationReason && (
+                                      <div className="p-3 bg-blue-50 border-l-4 border-blue-400 rounded-lg text-sm text-blue-800">
+                                        <div className="font-bold mb-1">
+                                          {news.nickname || '익명'} ({news.companyName} / {news.jobTitle}) 추천 ({news.recommendationStrength}/5)
+                                        </div>
+                                        <div>{news.recommendationReason}</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                <div className="flex justify-between items-end text-sm text-gray-600 mt-4 pt-3 border-t border-gray-50">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">{news.keyword}</span>
+                                    <span className="text-gray-500 text-xs sm:text-sm font-medium">{news.source}</span>
+                                    <span className="text-gray-500 text-xs sm:text-sm flex-shrink-0">{news.date}</span>
+                                    {news.url && <a href={news.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm"><ExternalLink size={14} />원문 보기</a>}
+                                  </div>
+                                  <div className="flex items-center gap-1 text-red-500 font-semibold text-xs sm:text-sm">
+                                    <span className="text-gray-400">👍</span>
+                                    {news.likes || 0}
                                   </div>
                                 </div>
                               </Card>
                           ))}
-                          {groupedNewsByDate[date].length > (showMoreCounts[date] || 10) && (
-                              <div className="text-center mt-4">
-                                  <button onClick={() => handleLoadMore(date)} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-full font-semibold hover:bg-gray-300 transition-colors">더 불러오기 ({groupedNewsByDate[date].length - (showMoreCounts[date] || 10)}개 남음)</button>
-                              </div>
-                          )}
                       </div>
                   </section>
               ))}
