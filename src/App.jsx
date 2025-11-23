@@ -4,6 +4,7 @@ import {
   Newspaper,
   Star,
   MessageCircle,
+  Share2, // 공유 아이콘 추가
 } from "lucide-react";
 
 import { initializeApp } from 'firebase/app';
@@ -30,7 +31,8 @@ const ITNewsApp = () => {
   const [error, setError] = useState("");
   const [latestDate, setLatestDate] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-  const [showMoreCounts, setShowMoreCounts] = useState({});
+  
+  // NOTE: 모든 뉴스를 펼치기 위해 showMoreCounts와 handleLoadMore 함수를 제거했습니다.
 
   // State for Firebase services and user authentication
   const [db, setDb] = useState(null);
@@ -67,6 +69,50 @@ const ITNewsApp = () => {
   const SHEET_NAME = "NEWS";
   const GOOGLE_SHEETS_API_KEY = "AIzaSyDIig_uUt8grXOehM3JyI_sabFBh3EuTS8";
   const GA_MEASUREMENT_ID = "G-8VSL7PKF5M";
+  const KAKAO_JS_KEY = '8d3d95856b3e9a9101c563dd0d139ccb'; // 예시 앱 키
+
+  // --- Kakao SDK Load & Initialization ---
+  useEffect(() => {
+    if (window.Kakao) {
+      // 이미 로드된 경우 초기화
+      if (!window.Kakao.isInitialized()) {
+        try {
+          window.Kakao.init(KAKAO_JS_KEY);
+          console.log('Kakao SDK initialized');
+        } catch (e) {
+          console.error('Kakao SDK initialization failed:', e);
+        }
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://developers.kakao.com/sdk/js/kakao.js';
+    script.async = true;
+    
+    script.onload = () => {
+      if (window.Kakao && !window.Kakao.isInitialized()) {
+        try {
+          window.Kakao.init(KAKAO_JS_KEY);
+          console.log('Kakao SDK loaded and initialized.');
+        } catch (e) {
+          console.error('Kakao SDK initialization failed after load:', e);
+        }
+      }
+    };
+    script.onerror = () => {
+      console.error('Kakao SDK script failed to load.');
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, [KAKAO_JS_KEY]);
+
 
   // --- Firebase Initialization & Authentication ---
   useEffect(() => {
@@ -170,7 +216,7 @@ const ITNewsApp = () => {
       date: 5,
       summary: 6,
       content: 7,
-      imageUrl: 8,
+      imageUrl: 8, // 이미지 URL 컬럼
       nickname: 9,
       companyName: 10,
       jobTitle: 11,
@@ -237,34 +283,39 @@ const ITNewsApp = () => {
 
   // Simulated data for development/fallback
   const loadSimulatedData = useCallback(() => {
+    // NOTE: 'all' 탭의 7일 이내 필터링을 통과하도록 날짜를 최신으로 업데이트했습니다.
+    const today = '2025-11-23'; 
+    const yesterday = '2025-11-22';
+    const twoDaysAgo = '2025-11-21';
+
     const commonSimulatedData = [
       {
-        title: "네이버, AI 검색 서비스 대폭 개선... 정확도 30% 향상", keyword: "네이버", source: "IT조선", tags: "#AI #검색 #기술혁신 #추천", url: "https://example.com/news1", date: "2025-08-01", time: '16:10', summary: "네이버가 자체 개발한 AI 기술을 적용하여 검색 정확도를 크게 개선했으며, 사용자 만족도가 크게 향상될 것으로 예상됩니다.", content: "이는 대규모 언어 모델(LLM)과 최신 검색 알고리즘을 결합한 결과입니다. 사용자들은 이제 더 빠르고 정확한 정보를 얻을 수 있을 것으로 기대됩니다.",
+        title: "네이버, AI 검색 서비스 대폭 개선... 정확도 30% 향상", keyword: "네이버", source: "IT조선", tags: "#AI #검색 #기술혁신 #추천", url: "https://example.com/news1", date: today, time: '16:10', summary: "네이버가 자체 개발한 AI 기술을 적용하여 검색 정확도를 크게 개선했으며, 사용자 만족도가 크게 향상될 것으로 예상됩니다.", content: "이는 대규모 언어 모델(LLM)과 최신 검색 알고리즘을 결합한 결과입니다. 사용자들은 이제 더 빠르고 정확한 정보를 얻을 수 있을 것으로 기대됩니다.",
         imageUrl: "https://placehold.co/100x80/2DB400/FFFFFF?text=NAVER_NEWS",
         nickname: "개발자김", companyName: "네이버", jobTitle: "AI 개발자", recommendationStrength: 5, recommendationReason: "이 기사는 AI 검색의 미래를 보여줍니다.", likes: 12
       },
       {
-        title: "토스, 투자 플랫폼 '토스증권' 월 거래액 10조원 돌파", keyword: "토스", source: "매일경제", tags: "#핀테크 #투자 #거래액 #추천", url: "https://example.com/news2", date: "2025-07-31", time: '16:00', summary: "토스증권이 월 거래액 10조원을 돌파하며 핀테크 시장의 새로운 강자로 떠올랐습니다.", content: "간편한 인터페이스와 다양한 투자 상품으로 2030 세대의 높은 지지를 받고 있으며, 시장 점유율을 빠르게 확대하고 있습니다.",
+        title: "토스, 투자 플랫폼 '토스증권' 월 거래액 10조원 돌파", keyword: "토스", source: "매일경제", tags: "#핀테크 #투자 #거래액 #추천", url: "https://example.com/news2", date: yesterday, time: '16:00', summary: "토스증권이 월 거래액 10조원을 돌파하며 핀테크 시장의 새로운 강자로 떠올랐습니다.", content: "간편한 인터페이스와 다양한 투자 상품으로 2030 세대의 높은 지지를 받고 있으며, 시장 점유율을 빠르게 확대하고 있습니다.",
         imageUrl: "https://placehold.co/100x80/0046FF/FFFFFF?text=TOSS_NEWS",
         nickname: "투자박", companyName: "토스", jobTitle: "증권 애널리스트", recommendationStrength: 4, recommendationReason: "핀테크 투자의 중요성을 강조합니다.", likes: 8
       },
       {
-        title: "카카오, 새로운 소셜 서비스 '카카오뷰' 출시", keyword: "카카오", source: "전자신문", tags: "#소셜 #플랫폼 #신규서비스", url: "https://example.com/news3", date: "2025-07-31", time: '15:30', summary: "카카오가 콘텐츠 큐레이션 기반의 새로운 소셜 서비스 '카카오뷰'를 출시하며 플랫폼 영향력 강화에 나섰습니다.", content: "사용자들이 직접 콘텐츠를 큐레이션하고 발행할 수 있는 기능을 제공하며, 새로운 정보 소비 방식을 제안합니다.",
+        title: "카카오, 새로운 소셜 서비스 '카카오뷰' 출시", keyword: "카카오", source: "전자신문", tags: "#소셜 #플랫폼 #신규서비스", url: "https://example.com/news3", date: yesterday, time: '15:30', summary: "카카오가 콘텐츠 큐레이션 기반의 새로운 소셜 서비스 '카카오뷰'를 출시하며 플랫폼 영향력 강화에 나섰습니다.", content: "사용자들이 직접 콘텐츠를 큐레이션하고 발행할 수 있는 기능을 제공하며, 새로운 정보 소비 방식을 제안합니다.",
         imageUrl: "https://placehold.co/100x80/F9E000/000000?text=KAKAO_NEWS",
         nickname: "콘텐츠이", companyName: "카카오", jobTitle: "서비스 기획자", recommendationStrength: 3, recommendationReason: "새로운 소셜 경험을 위한 필수 서비스.", likes: 25
       },
       {
-        title: "당근마켓, 지역 커뮤니티 활성화로 월 사용자 2천만 명 달성", keyword: "당근마켓", source: "블로터", tags: "#커뮤니티 #중고거래 #추천", url: "https://example.com/news4", date: "2025-07-30", time: '10:00', summary: "당근마켓이 단순 중고거래를 넘어 지역 커뮤니티 플랫폼으로 자리매김하며 월간 활성 사용자(MAU) 2천만 명을 돌파했습니다.", content: "이웃과의 소통과 정보 교환을 통해 지역 생활에 필수적인 앱으로 성장했으며, 다양한 연령대의 사용자를 확보하고 있습니다.",
+        title: "당근마켓, 지역 커뮤니티 활성화로 월 사용자 2천만 명 달성", keyword: "당근마켓", source: "블로터", tags: "#커뮤니티 #중고거래 #추천", url: "https://example.com/news4", date: twoDaysAgo, time: '10:00', summary: "당근마켓이 단순 중고거래를 넘어 지역 커뮤니티 플랫폼으로 자리매김하며 월간 활성 사용자(MAU) 2천만 명을 돌파했습니다.", content: "이웃과의 소통과 정보 교환을 통해 지역 생활에 필수적인 앱으로 성장했으며, 다양한 연령대의 사용자를 확보하고 있습니다.",
         imageUrl: "https://placehold.co/100x80/FF6F00/FFFFFF?text=DAANGN_NEWS",
         nickname: "마케터정", companyName: "당근마켓", jobTitle: "마케팅 전문가", recommendationStrength: 5, recommendationReason: "지역 기반 서비스의 성공 사례입니다.", likes: 40
       },
       {
-        title: "새로운 기술 동향, 블록체인 기반 서비스 확산", keyword: "블록체인", source: "테크월드", tags: "#블록체인 #기술동향", url: "https://example.com/news5", date: "2025-08-01", time: '09:00', summary: "블록체인 기술이 다양한 산업 분야로 확산되며 새로운 서비스 모델을 제시하고 있습니다.", content: "금융, 유통, 제조 등 여러 분야에서 블록체인 기반의 혁신적인 솔루션이 등장하고 있으며, 이에 대한 기대감이 커지고 있습니다.",
+        title: "새로운 기술 동향, 블록체인 기반 서비스 확산", keyword: "블록체인", source: "테크월드", tags: "#블록체인 #기술동향", url: "https://example.com/news5", date: today, time: '09:00', summary: "블록체인 기술이 다양한 산업 분야로 확산되며 새로운 서비스 모델을 제시하고 있습니다.", content: "금융, 유통, 제조 등 여러 분야에서 블록체인 기반의 혁신적인 솔루션이 등장하고 있으며, 이에 대한 기대감이 커지고 있습니다.",
         imageUrl: "https://placehold.co/100x80/4A90E2/FFFFFF?text=BLOCKCHAIN",
         nickname: "", companyName: "", jobTitle: "", recommendationStrength: 0, recommendationReason: "", likes: 7
       },
       {
-        title: "클라우드 서비스, 기업 디지털 전환 핵심으로 부상", keyword: "클라우드", source: "디지털데일리", tags: "#클라우드 #디지털전환", url: "https://example.com/news6", date: "2025-08-01", time: '08:00', summary: "클라우드 컴퓨팅이 기업의 디지털 전환을 가속화하는 핵심 기술로 주목받고 있습니다.", content: "유연성과 확장성을 바탕으로 기업 IT 인프라의 효율성을 극대화하며, 새로운 비즈니스 기회를 창출하고 있습니다.",
+        title: "클라우드 서비스, 기업 디지털 전환 핵심으로 부상", keyword: "클라우드", source: "디지털데일리", tags: "#클라우드 #디지털전환", url: "https://example.com/news6", date: today, time: '08:00', summary: "클라우드 컴퓨팅이 기업의 디지털 전환을 가속화하는 핵심 기술로 주목받고 있습니다.", content: "유연성과 확장성을 바탕으로 기업 IT 인프라의 효율성을 극대화하며, 새로운 비즈니스 기회를 창출하고 있습니다.",
         imageUrl: "https://placehold.co/100x80/FF9900/FFFFFF?text=CLOUD",
         nickname: "클라우드김", companyName: "AWS", jobTitle: "클라우드 아키텍트", recommendationStrength: 4, recommendationReason: "클라우드 도입을 고민하는 기업에게 필독!", likes: 15
       },
@@ -292,9 +343,37 @@ const ITNewsApp = () => {
 
   // --- Event Handlers & Logic ---
 
-  const handleLoadMore = (date) => {
-    setShowMoreCounts(p => ({ ...p, [date]: (p[date] || 10) + 7 }));
+  // 카카오톡 공유 함수
+  const handleKakaoShare = (news) => {
+    if (window.Kakao && window.Kakao.isInitialized()) {
+      window.Kakao.Share.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: news.title,
+          description: news.summary,
+          imageUrl: news.imageUrl || 'https://placehold.co/800x400/1E40AF/FFFFFF?text=IT%20News%20App',
+          link: {
+            mobileWebUrl: news.url,
+            webUrl: news.url,
+          },
+        },
+        buttons: [
+          {
+            title: '뉴스 원문 보기',
+            link: {
+              mobileWebUrl: news.url,
+              webUrl: news.url,
+            },
+          },
+        ],
+        installTalk: true, // 카카오톡 미설치 시 마켓으로 이동
+      });
+    } else {
+      console.warn("KakaoTalk SDK가 아직 로드되지 않았거나 초기화에 실패했습니다.");
+      // 사용자에게 보이지 않는 콘솔 메시지로 대체
+    }
   };
+
 
   const toggleBookmark = (newsId) => {
     setBookmarkedNewsIds(prev => {
@@ -321,7 +400,8 @@ const ITNewsApp = () => {
     if (activeTab === "all") {
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const isRecent = new Date(news.date) >= oneWeekAgo;
+      // 필터링: 최근 7일 이내 뉴스만 표시 + 선택된 키워드와 일치
+      const isRecent = new Date(news.date) >= oneWeekAgo; 
       const matchesKeyword = !selectedKeyword || news.keyword === selectedKeyword;
       return isRecent && matchesKeyword;
     }
@@ -413,49 +493,81 @@ const ITNewsApp = () => {
                       </p>
                   </div>
               )}
+              {/* 모든 뉴스를 날짜별로 펼쳐서 보여줍니다. */}
               {sortedDates.map(date => (
                   <section key={date} className="max-w-4xl mx-auto mb-8">
                       <h2 className="text-lg font-bold text-gray-700 mb-3 pl-2 border-l-4 border-blue-500">{date}</h2>
                       <div className="space-y-4">
-                          {groupedNewsByDate[date].slice(0, showMoreCounts[date] || 10).map((news) => (
+                          {groupedNewsByDate[date].map((news) => (
                               <Card key={news.id} className="p-4 bg-white hover:shadow-md transition-shadow duration-200">
-                                <div className="flex justify-between items-start gap-4 pt-3 border-t border-gray-100">
-                                  <h3 className="text-base text-gray-800 mb-1 flex-grow">{news.title}</h3>
-                                  <button onClick={() => toggleBookmark(news.id)} className="p-2 rounded-full hover:bg-yellow-100 transition-colors flex-shrink-0" aria-label="Toggle bookmark">
-                                    <Star size={22} className={bookmarkedNewsIds.has(news.id) ? "text-yellow-500 fill-current" : "text-gray-400 hover:text-yellow-500"} />
-                                  </button>
+                                <div className="flex justify-between items-start gap-4">
+                                    <h3 className="text-lg font-semibold text-gray-800 flex-grow">{news.title}</h3>
+                                    <div className="flex space-x-2 flex-shrink-0">
+                                        {/* 카카오톡 공유 버튼 */}
+                                        <button 
+                                            onClick={() => handleKakaoShare(news)} 
+                                            className="p-2 rounded-full hover:bg-yellow-100 transition-colors" 
+                                            aria-label="카카오톡으로 공유"
+                                            title="카카오톡 공유"
+                                        >
+                                            {/* 카카오톡 아이콘 대체 */}
+                                            <Share2 size={22} className="text-gray-400 hover:text-yellow-600" />
+                                        </button>
+                                        {/* 북마크 버튼 */}
+                                        <button onClick={() => toggleBookmark(news.id)} className="p-2 rounded-full hover:bg-yellow-100 transition-colors" aria-label="Toggle bookmark">
+                                          <Star size={22} className={bookmarkedNewsIds.has(news.id) ? "text-yellow-500 fill-current" : "text-gray-400 hover:text-yellow-500"} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-start gap-4 mt-2">
+                                
+                                {/* 이미지 미리보기와 요약 내용 */}
+                                <div className="flex items-start gap-4 mt-3">
                                   {news.imageUrl && (
                                     <img
                                       src={news.imageUrl}
                                       alt={news.title}
-                                      className="w-24 h-20 object-cover rounded-md flex-shrink-0"
+                                      className="w-24 h-20 object-cover rounded-lg flex-shrink-0 border border-gray-200"
                                       onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/100x80/E2E8F0/64748B?text=No+Img`; }}
                                     />
                                   )}
                                   <p className="flex-grow text-gray-700 text-base leading-relaxed">{news.summary}</p>
                                 </div>
+
+                                {/* 전체 내용 펼치기 */}
                                 {news.content && (
-                                  <p className="text-gray-700 text-base leading-relaxed mt-3 border-t border-gray-100 pt-3">{news.content}</p>
-                                )}
-                                <div className="flex justify-between items-center text-sm text-gray-600 mt-4">
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                                    <span className="bg-gray-100 px-2 py-1 rounded-md font-medium">{news.keyword}</span>
-                                    <span>{news.source}</span>
-                                    {news.url && <a href={news.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"><ExternalLink size={14} />원문 보기</a>}
-                                    {news.date && (
-                                      <span className="text-gray-500 text-xs flex-shrink-0">{news.date}</span>
+                                  <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <p className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">{news.content}</p>
+                                    {/* 추천인 정보 (내용 하단에 배치) */}
+                                    {news.nickname && news.recommendationReason && (
+                                        <div className="mt-3 p-3 bg-blue-50/50 rounded-md border border-blue-100 text-sm text-gray-700">
+                                            <p className="font-semibold text-blue-800">✍️ {news.nickname} 님의 추천 ({news.recommendationStrength}점)</p>
+                                            <p className="mt-1 pl-1 text-gray-600 italic">"{news.recommendationReason}"</p>
+                                        </div>
                                     )}
                                   </div>
+                                )}
+                                
+                                {/* 메타 정보 및 원문 링크 */}
+                                <div className="flex justify-between items-center text-sm text-gray-600 mt-4 pt-3 border-t border-gray-100">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                    <span className="bg-gray-100 px-2 py-1 rounded-full text-xs font-medium text-gray-600">{news.keyword}</span>
+                                    <span>{news.source}</span>
+                                    <span>{news.date}</span>
+                                  </div>
+                                  {news.url && 
+                                    <a 
+                                      href={news.url} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium flex-shrink-0"
+                                    >
+                                      <ExternalLink size={14} />
+                                      원문 보기
+                                    </a>
+                                  }
                                 </div>
                               </Card>
                           ))}
-                          {groupedNewsByDate[date].length > (showMoreCounts[date] || 10) && (
-                              <div className="text-center mt-4">
-                                  <button onClick={() => handleLoadMore(date)} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-full font-semibold hover:bg-gray-300 transition-colors">더 불러오기 ({groupedNewsByDate[date].length - (showMoreCounts[date] || 10)}개 남음)</button>
-                              </div>
-                          )}
                       </div>
                   </section>
               ))}
